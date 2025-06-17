@@ -198,7 +198,7 @@ float Dataset::compute_gain_ratio(int feature_index, float threshold)
 		if (this->data[i].feature[feature_index] <= threshold)
 		{
 			label_count_left[this->data[i].label]++;
-		}
+}
 		else
 		{
 			label_count_right[this->data[i].label]++;

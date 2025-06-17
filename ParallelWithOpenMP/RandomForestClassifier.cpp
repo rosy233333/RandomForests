@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include "ParallelConfig.h"
 
 RandomForestClassifier::RandomForestClassifier(int tree_num, int tree_max_depth, int tree_min_samples_split, int bootstrap_data_num, float bootstrap_feature_ratio)
 	: tree_num(tree_num), tree_max_depth(tree_max_depth), tree_min_samples_split(tree_min_samples_split), bootstrap_data_num(bootstrap_data_num), bootstrap_feature_ratio(bootstrap_feature_ratio)
@@ -20,6 +21,9 @@ RandomForestClassifier::~RandomForestClassifier()
 
 void RandomForestClassifier::train(Dataset* dataset)
 {
+#ifdef PARALLELIZE_ON_TREES
+#pragma omp parallel for
+#endif
 	for (int i = 0; i < tree_num; i++) // 可并行化，无数据竞争
 	{
 		Dataset* bootstrap_sample = dataset->bootstrap(bootstrap_data_num, bootstrap_feature_ratio);

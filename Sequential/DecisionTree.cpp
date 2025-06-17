@@ -54,7 +54,6 @@ void DecisionTree::train(Dataset* dataset)
 		else
 		{
 			// 否则，进行分裂操作
-			// float(* gain_ratio)[INSTANCE_MAX_NUM] = (float (*)[INSTANCE_MAX_NUM]) new float[FEATURE_NUM * INSTANCE_MAX_NUM];
 			struct spilt_info {
 				int feature_index;
 				float split_point;

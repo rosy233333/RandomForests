@@ -3,10 +3,15 @@
 #include "RandomForestClassifier.h"
 #include <cstdlib>
 #include <ctime>
+#include <omp.h>
+#include "ParallelConfig.h"
 
 int main()
 {
 	srand((unsigned)time(NULL));
+
+	omp_set_nested(1); // 启用并行嵌套
+	omp_set_num_threads(THREAD_NUM);
 
 	Dataset* train_dataset = Dataset::from_file("..\\wine-red-train.txt");
 	Dataset* test_dataset = Dataset::from_file("..\\wine-red-test.txt");
