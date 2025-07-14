@@ -19,15 +19,15 @@ int cmpfunc(const void* a, const void* b)
 	return (fa > fb) - (fa < fb);
 }
 
-// 用于处理节点的函数
-// 如果当前节点满足叶节点条件，则设置叶节点的类标签；否则，进行分裂操作
-// 进行分裂时，以left_node、left_dataset、right_node、right_dataset作为输出参数，它们指向的内存最终都需要用delete释放
-// 不进行分裂时，left_node、left_dataset、right_node、right_dataset均为nullptr
+// Functions for handling nodes
+// If the current node satisfies the leaf node condition, set class labels for leaf nodes; Otherwise, perform the split operation
+// When splitting is performed, left_node, left_dataset, right_node, right_dataset are used as output parameters, and the memory they point to will eventually need to be freed with delete
+// When splitting is not performed, left_node, left_dataset, right_node, right_dataset are all nullptr
 void process_node(int min_samples_split, TreeNode* node, Dataset* dataset, TreeNode** left_node, Dataset** left_dataset, TreeNode** right_node, Dataset** right_dataset)
 {
 	if (dataset->len < min_samples_split || node->subtree_max_depth <= 0)
 	{
-		// 如果数据集长度小于最小分裂样本数，或者子树最大深度小于等于0，则设置叶节点
+		// If the length of the dataset is less than the minimum number of split samples, or the maximum depth of the subtree is less than or equal to 0, set the leaf node
 		node->class_label = dataset->get_most_common_class_label();
 		*left_node = NULL;
 		*left_dataset = NULL;
@@ -36,27 +36,29 @@ void process_node(int min_samples_split, TreeNode* node, Dataset* dataset, TreeN
 	}
 	else
 	{
-		// 否则，进行分裂操作
+		// Otherwise, perform the split operation
 		struct spilt_info {
 			int feature_index;
 			float split_point;
 		};
-		spilt_info best_split[10]; // 最佳分裂点信息
+		spilt_info best_split[10]; // Optimal split point information
 		float best_gain_ratio = 0;
 		int best_split_count = 0;
 
-		// 寻找最佳分裂点
+		// Finding the optimal split point
 		for (int i = 0; i < FEATURE_NUM; i++) {
-			// 在该特征内部对样本值排序
+			// Order the sample values within this feature
 			float* sorted_values = new float[dataset->len];
 			for (int j = 0; j < dataset->len; j++) {
 				sorted_values[j] = dataset->data[j].feature[i];
 			}
 			qsort(sorted_values, dataset->len, sizeof(float), cmpfunc);
 
-			// 根据排序后的值寻找分裂点
+			// Finding split points based on sorted values
+#ifdef PARALLELIZE_ON_SPLITS
 #pragma omp parallel for
-			for (int j = 0; j < dataset->len - 1; j++) // 分裂点的数量比样本值的数量少1  // 可并行化，无数据竞争
+#endif
+			for (int j = 0; j < dataset->len - 1; j++) // The number of split points is less than the number of sample values by 1  // Parallelizable, no data contention
 			{
 				if (sorted_values[j] == sorted_values[j + 1])
 				{
@@ -64,30 +66,35 @@ void process_node(int min_samples_split, TreeNode* node, Dataset* dataset, TreeN
 				}
 				float spilt_point = (sorted_values[j] + sorted_values[j + 1]) / 2;
 				float current_gain_ratio = dataset->compute_gain_ratio(i, spilt_point);
-				if (current_gain_ratio > best_gain_ratio)
+#ifdef PARALLELIZE_ON_SPLITS
+#pragma omp critical (SPLIT_LOCK)
+#endif
 				{
-					best_gain_ratio = current_gain_ratio;
-					best_split[0].feature_index = i;
-					best_split[0].split_point = spilt_point;
-					best_split_count = 1;
-				}
-				else if (current_gain_ratio == best_gain_ratio)
-				{
-					if (best_split_count < 10)
+					if (current_gain_ratio > best_gain_ratio)
 					{
-						best_split[best_split_count].feature_index = i;
-						best_split[best_split_count].split_point = spilt_point;
-						best_split_count++;
+						best_gain_ratio = current_gain_ratio;
+						best_split[0].feature_index = i;
+						best_split[0].split_point = spilt_point;
+						best_split_count = 1;
+					}
+					else if (current_gain_ratio == best_gain_ratio)
+					{
+						if (best_split_count < 10)
+						{
+							best_split[best_split_count].feature_index = i;
+							best_split[best_split_count].split_point = spilt_point;
+							best_split_count++;
+						}
 					}
 				}
 			}
 
 			delete[] sorted_values;
-		} // 寻找过程结束后，best_split_count一定>0？
+		} // best_split_count must be > 0 at the end of the search process?
 
 		if (best_gain_ratio == 0)
 		{
-			// 分裂无法提供信息增益，则设置叶节点
+			// Split fails to provide information gain, then set leaf nodes
 			node->class_label = dataset->get_most_common_class_label();
 			*left_node = NULL;
 			*left_dataset = NULL;
@@ -96,12 +103,12 @@ void process_node(int min_samples_split, TreeNode* node, Dataset* dataset, TreeN
 		}
 		else
 		{
-			// 找到最佳分裂点
+			// Finding the optimal split point
 			int best_spilt_index_final = rand() % best_split_count;
 			int feature_index = best_split[best_spilt_index_final].feature_index;
 			float split_point = best_split[best_spilt_index_final].split_point;
 
-			// 分裂当前节点
+			// Splitting the current node
 			node->feature_index = feature_index;
 			node->threshold = split_point;
 			node->left_child = new TreeNode(node->subtree_max_depth - 1, node->min_samples_split);
@@ -117,10 +124,10 @@ void process_node(int min_samples_split, TreeNode* node, Dataset* dataset, TreeN
 
 void DecisionTree::train(Dataset* dataset)
 {
-	// 设置根节点
+	// Setting up the root node
 	this->root = new TreeNode(this->max_depth - 1, this->min_samples_split);
 
-	// 初始化待处理节点的队列
+	// Initialize the queue of pending nodes
 	struct NodeDataset {
 		TreeNode* node;
 		Dataset* dataset;
@@ -128,11 +135,11 @@ void DecisionTree::train(Dataset* dataset)
 	NodeDataset* node_queue = new NodeDataset[1024];
 	node_queue[0].node = this->root;
 	node_queue[0].dataset = new Dataset(dataset);
-	int producer_index = 1; // 指向可以放入的第一个空位
-	int consumer_index = 0; // 指向需要处理的第一个对象
-	int processing_node_num = 0; // 记录当前正在处理的节点数，用于判断是否所有节点都处理完毕
+	int producer_index = 1; // Points to the first empty space that can be placed
+	int consumer_index = 0; // Points to the first object to be processed
+	int processing_node_num = 0; // Records the number of nodes currently being processed, used to determine whether all nodes have been processed
 
-	// 开始处理每个待处理节点（分裂节点）
+	// Start processing each pending node (split node)
 #ifdef PARALLELIZE_ON_NODES
 #pragma omp parallel
 #endif
@@ -142,8 +149,8 @@ void DecisionTree::train(Dataset* dataset)
 #endif
 		{
 			bool is_finished = false;
-			DecisionTree* this_ = this; // 需要在并行化时使用this指针，因此需要将其传递给线程
-			while (!is_finished) // 可并行化，有对node_queue、producer_index和consumer_index的数据竞争。因此并行化时需要对节点队列加锁。
+			DecisionTree* this_ = this; // Need to use this pointer during parallelization, so it needs to be passed to the thread
+			while (!is_finished) // Parallelizable with data contention for node_queue, producer_index and consumer_index. Therefore parallelization requires a lock on the node queue.
 			{
 #ifdef PARALLELIZE_ON_NODES
 #pragma omp task
@@ -171,14 +178,14 @@ void DecisionTree::train(Dataset* dataset)
 						}
 					}
 
-					if (current_consumer_index != -1) // 只有在有待处理节点时才进行处理
+					if (current_consumer_index != -1) // Process nodes only if they are pending
 					{
 						TreeNode* node = node_queue[current_consumer_index].node;
 						Dataset* dataset = node_queue[current_consumer_index].dataset;
 
 						if (dataset->len < this->min_samples_split || node->subtree_max_depth <= 0)
 						{
-							// 如果数据集长度小于最小分裂样本数，或者子树最大深度小于等于0，则设置叶节点
+							// If the length of the dataset is less than the minimum number of split samples, or the maximum depth of the subtree is less than or equal to 0, set the leaf node
 							node->class_label = dataset->get_most_common_class_label();
 #ifdef PARALLELIZE_ON_NODES
 #pragma omp atomic
@@ -187,29 +194,29 @@ void DecisionTree::train(Dataset* dataset)
 						}
 						else
 						{
-							// 否则，进行分裂操作
+							// Otherwise, perform the split operation
 							struct spilt_info {
 								int feature_index;
 								float split_point;
 							};
-							spilt_info best_split[10]; // 最佳分裂点信息
+							spilt_info best_split[10]; // Optimal split point information
 							float best_gain_ratio = 0;
 							int best_split_count = 0;
 
-							// 寻找最佳分裂点
+							// Finding the optimal split point
 							for (int i = 0; i < FEATURE_NUM; i++) {
-								// 在该特征内部对样本值排序
+								// Order the sample values within this feature
 								float* sorted_values = new float[dataset->len];
 								for (int j = 0; j < dataset->len; j++) {
 									sorted_values[j] = dataset->data[j].feature[i];
 								}
 								qsort(sorted_values, dataset->len, sizeof(float), cmpfunc);
 
-								// 根据排序后的值寻找分裂点
+								// Finding split points based on sorted values
 #ifdef PARALLELIZE_ON_SPLITS
 #pragma omp parallel for
 #endif
-								for (int j = 0; j < dataset->len - 1; j++) // 分裂点的数量比样本值的数量少1  // 可并行化，无数据竞争
+								for (int j = 0; j < dataset->len - 1; j++) // The number of split points is less than the number of sample values by 1  // Parallelizable, no data contention
 								{
 									if (sorted_values[j] == sorted_values[j + 1])
 									{
@@ -236,11 +243,11 @@ void DecisionTree::train(Dataset* dataset)
 								}
 
 								delete[] sorted_values;
-							} // 寻找过程结束后，best_split_count一定>0？
+							} // best_split_count must be > 0 at the end of the search process?
 
 							if (best_gain_ratio == 0)
 							{
-								// 分裂无法提供信息增益，则设置叶节点
+								// Split fails to provide information gain, then set leaf nodes
 								node->class_label = dataset->get_most_common_class_label();
 #ifdef PARALLELIZE_ON_NODES
 #pragma omp atomic
@@ -249,12 +256,12 @@ void DecisionTree::train(Dataset* dataset)
 							}
 							else
 							{
-								// 找到最佳分裂点
+								// Finding the optimal split point
 								int best_spilt_index_final = rand() % best_split_count;
 								int feature_index = best_split[best_spilt_index_final].feature_index;
 								float split_point = best_split[best_spilt_index_final].split_point;
 
-								// 分裂当前节点
+								// Splitting the current node
 								node->feature_index = feature_index;
 								node->threshold = split_point;
 								node->left_child = new TreeNode(node->subtree_max_depth - 1, node->min_samples_split);
@@ -263,7 +270,7 @@ void DecisionTree::train(Dataset* dataset)
 								Dataset* right_dataset = new Dataset();
 								dataset->spilt(feature_index, split_point, left_dataset, right_dataset);
 
-								// 将分裂后的子节点和数据集放入队列中
+								// Place the split child nodes and dataset into the queue
 #ifdef PARALLELIZE_ON_NODES
 #pragma omp critical (QUEUE_LOCK)
 #endif
@@ -286,7 +293,7 @@ void DecisionTree::train(Dataset* dataset)
 							}
 						}
 
-						delete dataset; // dataset需要释放，而node不需释放，因为它是树的一部分
+						delete dataset; // The dataset needs to be freed, while the node doesn't need to be freed because it is part of the tree
 					}
 				}
 #ifdef PARALLELIZE_ON_NODES
@@ -295,7 +302,7 @@ void DecisionTree::train(Dataset* dataset)
 				{
 					if (processing_node_num == 0 && consumer_index == producer_index)
 					{
-						is_finished = true; // 需要同时满足两个条件，才能确定没有待处理的节点，进而退出循环
+						is_finished = true; // Both conditions need to be met in order to determine that there are no pending nodes and thus exit the loop
 					}
 				}
 			}
@@ -308,9 +315,9 @@ void DecisionTree::train(Dataset* dataset)
 int* DecisionTree::test(Dataset* dataset)
 {
 	int* result = new int[dataset->len];
-	for (int i = 0; i < dataset->len; i++) // 可并行化，无数据竞争
+	for (int i = 0; i < dataset->len; i++) // Parallelizable, no data contention
 	{
-		Instance* instance = &dataset->data[i]; // 对该实例进行测试
+		Instance* instance = &dataset->data[i]; // Tests on this instance
 
 		TreeNode* current_node = this->root;
 		while (current_node->class_label == -1)
@@ -324,7 +331,7 @@ int* DecisionTree::test(Dataset* dataset)
 				current_node = current_node->right_child;
 			}
 		}
-		result[i] = current_node->class_label; // 叶节点的类标签
+		result[i] = current_node->class_label; // Class labels for leaf nodes
 	}
 	return result;
 }
@@ -369,7 +376,7 @@ char* TreeNode::to_string()
 			const char split_token[2] = "\n";
 			char* current_line = strtok(left_str, split_token);
 			do {
-				sprintf(node_str + offset, "\t%s\n", current_line); // 添加制表符缩进
+				sprintf(node_str + offset, "\t%s\n", current_line); // Add tab indentation
 				offset += strlen(current_line) + 2;
 				current_line = strtok(NULL, split_token);
 			} while (current_line != NULL);
@@ -381,7 +388,7 @@ char* TreeNode::to_string()
 			const char split_token[2] = "\n";
 			char* current_line = strtok(right_str, split_token);
 			do {
-				sprintf(node_str + offset, "\t%s\n", current_line); // 添加制表符缩进
+				sprintf(node_str + offset, "\t%s\n", current_line); // Add tab indentation
 				offset += strlen(current_line) + 2;
 				current_line = strtok(NULL, split_token);
 			} while (current_line != NULL);

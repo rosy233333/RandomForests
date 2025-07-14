@@ -2,10 +2,10 @@
 
 #define THREAD_NUM (8)
 
-// 通过注释和取消注释来控制并行化的方式
-// 在训练不同的决策树时并行化
+// Controlling parallelization through annotation and unannotation
+// Parallelization in training different decision trees
 #define PARALLELIZE_ON_TREES 
-// 在训练决策树的不同节点时并行化
+// Parallelization in training different nodes of a decision tree
 #define PARALLELIZE_ON_NODES
-// 在选取不同分裂点、计算不同分裂点的增益时并行化
+// Parallelization in selecting different splitting points and calculating the gain of different splitting points
 #define PARALLELIZE_ON_SPLITS

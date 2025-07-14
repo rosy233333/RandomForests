@@ -24,7 +24,7 @@ void RandomForestClassifier::train(Dataset* dataset)
 #ifdef PARALLELIZE_ON_TREES
 #pragma omp parallel for
 #endif
-	for (int i = 0; i < tree_num; i++) // 可并行化，无数据竞争
+	for (int i = 0; i < tree_num; i++) // Parallelizable, no data contention
 	{
 		Dataset* bootstrap_sample = dataset->bootstrap(bootstrap_data_num, bootstrap_feature_ratio);
 		this->trees[i].train(bootstrap_sample);
@@ -35,14 +35,14 @@ void RandomForestClassifier::train(Dataset* dataset)
 int* RandomForestClassifier::test(Dataset* dataset)
 {
 	int* results = new int[dataset->len];
-	int(*votes)[CLASS_NUM] = (int (*)[CLASS_NUM])new int[CLASS_NUM * dataset->len]; // 2维数组，第一维表示实例，第二维表示投票结果
-	int* max_votes = new int[dataset->len]; // 存储每个实例的最大投票数
+	int(*votes)[CLASS_NUM] = (int (*)[CLASS_NUM])new int[CLASS_NUM * dataset->len]; // 2-dimensional array, first dimension represents instances, second dimension represents vote results
+	int* max_votes = new int[dataset->len]; // Store the maximum number of votes per instance
 	memset(votes, 0, sizeof(int) * CLASS_NUM * dataset->len);
 	memset(max_votes, 0, sizeof(int) * dataset->len);
-	for (int i = 0; i < this->tree_num; i++) // 可并行化，有对max_votes的数据竞争
+	for (int i = 0; i < this->tree_num; i++) // Parallelizable with data competition for max_votes
 	{
 		int* current_results = this->trees[i].test(dataset);
-		for (int j = 0; j < dataset->len; j++) // 可并行化，无数据竞争
+		for (int j = 0; j < dataset->len; j++) // Parallelizable, no data contention
 		{
 			votes[j][current_results[j]]++;
 			if (votes[j][current_results[j]] > max_votes[j]) {
@@ -52,7 +52,7 @@ int* RandomForestClassifier::test(Dataset* dataset)
 		delete[] current_results;
 	}
 
-	for (int i = 0; i < dataset->len; i++) // 可并行化，无数据竞争
+	for (int i = 0; i < dataset->len; i++) // Parallelizable, no data contention
 	{
 		int max_vote_class[CLASS_NUM];
 		int max_vote_count = 0;
@@ -64,7 +64,7 @@ int* RandomForestClassifier::test(Dataset* dataset)
 				break;
 			}
 		}
-		int max_vote_class_final = max_vote_class[rand() % max_vote_count]; // 随机选择最大投票数的类别
+		int max_vote_class_final = max_vote_class[rand() % max_vote_count]; // Randomly select the category with the largest number of votes
 		results[i] = max_vote_class_final;
 	}
 

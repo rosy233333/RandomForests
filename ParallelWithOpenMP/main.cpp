@@ -10,7 +10,7 @@ int main()
 {
 	srand((unsigned)time(NULL));
 
-	omp_set_nested(1); // 启用并行嵌套
+	omp_set_nested(1); // Enable Parallel Nesting
 	omp_set_num_threads(THREAD_NUM);
 
 	Dataset* train_dataset = Dataset::from_file("..\\wine-red-train.txt");

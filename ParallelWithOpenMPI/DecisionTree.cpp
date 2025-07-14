@@ -19,10 +19,10 @@ int cmpfunc(const void* a, const void* b)
 
 void DecisionTree::train(Dataset* dataset)
 {
-	// 设置根节点
+	// Setting up the root node
 	this->root = new TreeNode(this->max_depth - 1, this->min_samples_split);
 
-	// 初始化待处理节点的队列
+	// Initialize the queue of pending nodes
 	struct NodeDataset {
 		TreeNode* node;
 		Dataset* dataset;
@@ -30,11 +30,11 @@ void DecisionTree::train(Dataset* dataset)
 	NodeDataset* node_queue = new NodeDataset[1024];
 	node_queue[0].node = this->root;
 	node_queue[0].dataset = new Dataset(dataset);
-	int producer_index = 1; // 指向可以放入的第一个空位
-	int consumer_index = 0; // 指向需要处理的第一个对象
+	int producer_index = 1; // Points to the first empty space that can be placed
+	int consumer_index = 0; // Points to the first object to be processed
 
-	// 开始处理每个待处理节点（分裂节点）
-	while (consumer_index < producer_index) // 可并行化，有对node_queue、producer_index和consumer_index的数据竞争。因此并行化时需要对节点队列加锁。
+	// Start processing each pending node (split node)
+	while (consumer_index < producer_index) // Parallelizable with data contention for node_queue, producer_index and consumer_index. Therefore parallelization requires a lock on the node queue.
 	{
 		if (consumer_index >= 1024)
 		{
@@ -48,32 +48,32 @@ void DecisionTree::train(Dataset* dataset)
 
 		if (dataset->len < this->min_samples_split || node->subtree_max_depth <= 0)
 		{
-			// 如果数据集长度小于最小分裂样本数，或者子树最大深度小于等于0，则设置叶节点
+			// If the length of the dataset is less than the minimum number of split samples, or the maximum depth of the subtree is less than or equal to 0, set the leaf node
 			node->class_label = dataset->get_most_common_class_label();
 		}
 		else
 		{
-			// 否则，进行分裂操作
+			// Otherwise, perform the split operation
 			// float(* gain_ratio)[INSTANCE_MAX_NUM] = (float (*)[INSTANCE_MAX_NUM]) new float[FEATURE_NUM * INSTANCE_MAX_NUM];
 			struct spilt_info {
 				int feature_index;
 				float split_point;
 			};
-			spilt_info best_split[10]; // 最佳分裂点信息
+			spilt_info best_split[10]; // Optimal split point information
 			float best_gain_ratio = 0;
 			int best_split_count = 0;
 
-			// 寻找最佳分裂点
+			// Finding the optimal split point
 			for (int i = 0; i < FEATURE_NUM; i++) {
-				// 在该特征内部对样本值排序
+				// Order the sample values within this feature
 				float* sorted_values = new float[dataset->len];
 				for (int j = 0; j < dataset->len; j++) {
 					sorted_values[j] = dataset->data[j].feature[i];
 				}
 				qsort(sorted_values, dataset->len, sizeof(float), cmpfunc);
 
-				// 根据排序后的值寻找分裂点
-				for (int j = 0; j < dataset->len - 1; j++) // 分裂点的数量比样本值的数量少1  // 可并行化，无数据竞争
+				// Finding split points based on sorted values
+				for (int j = 0; j < dataset->len - 1; j++) // The number of split points is less than the number of sample values by 1  // Parallelizable, no data contention
 				{
 					if (sorted_values[j] == sorted_values[j + 1])
 					{
@@ -100,21 +100,21 @@ void DecisionTree::train(Dataset* dataset)
 				}
 
 				delete[] sorted_values;
-			} // 寻找过程结束后，best_split_count一定>0？
+			} // best_split_count must be > 0 at the end of the search process?
 
 			if (best_gain_ratio == 0)
 			{
-				// 分裂无法提供信息增益，则设置叶节点
+				// Split fails to provide information gain, then set leaf nodes
 				node->class_label = dataset->get_most_common_class_label();
 			}
 			else
 			{
-				// 找到最佳分裂点
+				// Finding the optimal split point
 				int best_spilt_index_final = rand() % best_split_count;
 				int feature_index = best_split[best_spilt_index_final].feature_index;
 				float split_point = best_split[best_spilt_index_final].split_point;
 
-				// 分裂当前节点
+				// Splitting the current node
 				node->feature_index = feature_index;
 				node->threshold = split_point;
 				node->left_child = new TreeNode(node->subtree_max_depth - 1, node->min_samples_split);
@@ -135,7 +135,7 @@ void DecisionTree::train(Dataset* dataset)
 			}
 		}
 
-		delete dataset; // dataset需要释放，而node不需释放，因为它是树的一部分
+		delete dataset; // The dataset needs to be freed, while the node doesn't need to be freed because it is part of the tree
 	}
 
 	delete[] node_queue;
@@ -144,9 +144,9 @@ void DecisionTree::train(Dataset* dataset)
 int* DecisionTree::test(Dataset* dataset)
 {
 	int* result = new int[dataset->len];
-	for (int i = 0; i < dataset->len; i++) // 可并行化，无数据竞争
+	for (int i = 0; i < dataset->len; i++) // Parallelizable, no data contention
 	{
-		Instance* instance = &dataset->data[i]; // 对该实例进行测试
+		Instance* instance = &dataset->data[i]; // Tests on this instance
 
 		TreeNode* current_node = this->root;
 		while (current_node->class_label == -1)
@@ -160,7 +160,7 @@ int* DecisionTree::test(Dataset* dataset)
 				current_node = current_node->right_child;
 			}
 		}
-		result[i] = current_node->class_label; // 叶节点的类标签
+		result[i] = current_node->class_label; // Class labels for leaf nodes
 	}
 	return result;
 }
@@ -205,7 +205,7 @@ char* TreeNode::to_string()
 			const char split_token[2] = "\n";
 			char* current_line = strtok(left_str, split_token);
 			do {
-				sprintf(node_str + offset, "\t%s\n", current_line); // 添加制表符缩进
+				sprintf(node_str + offset, "\t%s\n", current_line); // Add tab indentation
 				offset += strlen(current_line) + 2;
 				current_line = strtok(NULL, split_token);
 			} while (current_line != NULL);
@@ -217,7 +217,7 @@ char* TreeNode::to_string()
 			const char split_token[2] = "\n";
 			char* current_line = strtok(right_str, split_token);
 			do {
-				sprintf(node_str + offset, "\t%s\n", current_line); // 添加制表符缩进
+				sprintf(node_str + offset, "\t%s\n", current_line); // Add tab indentation
 				offset += strlen(current_line) + 2;
 				current_line = strtok(NULL, split_token);
 			} while (current_line != NULL);
