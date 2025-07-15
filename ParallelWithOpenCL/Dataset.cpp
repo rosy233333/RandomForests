@@ -1,11 +1,15 @@
+#define _USE_MATH_DEFINES
+#include "Dataset.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
-#include "Dataset.h"
+#include <cmath>
+#include <cstddef>
+#include <algorithm>
 
-extern const char* CLASS_LABELS[CLASS_NUM] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }; // The string corresponding to the class label
-extern const char* SPLIT_TOKEN = ",;\n"; // Separator for each row of data in the dataset file
+const char* CLASS_LABELS[CLASS_NUM] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }; 
+const char* SPLIT_TOKEN = ",;\n"; 
 
 Dataset* Dataset::from_file(const char* filename)
 {
@@ -24,13 +28,13 @@ Dataset* Dataset::from_file(const char* filename)
 		char line[200];
 		if (fgets(line, sizeof(line), file) == NULL)
 		{
-			break; // Read to end of file
+			break; 
 		}
 		else
 		{
-			// Parsing each row of data
+			
 			char* token = strtok(line, SPLIT_TOKEN);
-			int label_; // Integer values for storing labels
+			int label_; 
 			for (int i = 0; i < FEATURE_NUM; i++)
 			{
 				if (token == NULL)
@@ -40,7 +44,7 @@ Dataset* Dataset::from_file(const char* filename)
 					delete[] buffer;
 					exit(-1);
 				}
-				feature[i] = atof(token); // Converting strings to floating point numbers
+				feature[i] = atof(token); 
 				token = strtok(NULL, SPLIT_TOKEN);
 			}
 
@@ -55,11 +59,11 @@ Dataset* Dataset::from_file(const char* filename)
 				}
 				if (strcmp(token, CLASS_LABELS[i]) == 0)
 				{
-					label_ = i; // Converting labels to integers
+					label_ = i; 
 					break;
 				}
 
-				if (i == CLASS_NUM - 1) // If it reaches the last label and still doesn't match
+				if (i == CLASS_NUM - 1) 
 				{
 					printf("Invalid label: %s\n", token);
 					fclose(file);
@@ -77,7 +81,7 @@ Dataset* Dataset::from_file(const char* filename)
 	dataset->data = new Instance[count];
 	memcpy(dataset->data, buffer, count * sizeof(Instance));
 
-	delete[] buffer; // Release temporary buffer memory
+	delete[] buffer; 
 	return dataset;
 }
 
@@ -91,7 +95,7 @@ Dataset* Dataset::shuffle()
 		while (true)
 		{
 			current = rand() % data_num;
-			// de-duplicate
+			
 			bool flag = true;
 			for (int j = 0; j < i; j++)
 			{
@@ -127,7 +131,7 @@ Dataset* Dataset::bootstrap(int data_num, float feature_ratio)
 		exit(-1);
 	}
 
-	// Select a feature
+	
 	int feature_num = (int)ceil(FEATURE_NUM * feature_ratio);
 	int selected_feature_mask[FEATURE_NUM] = { 0 };
 	for (int i = 0; i < feature_num;)
@@ -140,7 +144,7 @@ Dataset* Dataset::bootstrap(int data_num, float feature_ratio)
 		}
 	}
 
-	// Select an instance
+	
 	Dataset* dataset = new Dataset();
 	dataset->len = data_num;
 	dataset->data = new Instance[data_num];
@@ -164,7 +168,7 @@ float Dataset::validate(int* result)
 		exit(-1);
 	}
 
-	int correct_count = 0; // Count correct classifications
+	int correct_count = 0; 
 	for (int i = 0; i < this->len; i++) {
 		if (result[i] == this->data[i].label) {
 			correct_count++;
@@ -173,7 +177,7 @@ float Dataset::validate(int* result)
 	return 1.0 * correct_count / this->len;
 }
 
-// Calculate the value of x * log2(x), return 0 if x = 0
+
 float xlog2x(float x)
 {
 	if (x == 0)
@@ -188,9 +192,9 @@ float xlog2x(float x)
 
 float Dataset::compute_gain_ratio(int feature_index, float threshold)
 {
-	int label_count[CLASS_NUM] = { 0 }; // Number of instances corresponding to each label
-	int label_count_left[CLASS_NUM] = { 0 }; // Number of instances corresponding to each label in the left subset
-	int label_count_right[CLASS_NUM] = { 0 }; // Number of instances corresponding to each label in the right subset
+	int label_count[CLASS_NUM] = { 0 }; 
+	int label_count_left[CLASS_NUM] = { 0 }; 
+	int label_count_right[CLASS_NUM] = { 0 }; 
 
 	for (int i = 0; i < this->len; i++)
 	{
@@ -217,7 +221,7 @@ float Dataset::compute_gain_ratio(int feature_index, float threshold)
 		right_count += label_count_right[i];
 	}
 
-	// Calculate the information gain
+	
 	float entropy = 0.0f;
 	for (int i = 0; i < CLASS_NUM; i++)
 	{
@@ -241,7 +245,7 @@ float Dataset::compute_gain_ratio(int feature_index, float threshold)
 
 void Dataset::spilt(int feature_index, float threshold, Dataset* left, Dataset* right)
 {
-	// Count the number of instances in the left and right subsets
+	
 	int left_count = 0, right_count = 0;
 	for (int i = 0; i < this->len; i++)
 	{
@@ -255,13 +259,13 @@ void Dataset::spilt(int feature_index, float threshold, Dataset* left, Dataset* 
 		}
 	}
 
-	// Allocate memory for left and right subsets
+	
 	left->len = left_count;
 	left->data = new Instance[left_count];
 	right->len = right_count;
 	right->data = new Instance[right_count];
 
-	// Distribute data to left and right subsets
+	
 	int left_index = 0, right_index = 0;
 	for (int i = 0; i < this->len; i++)
 	{
@@ -285,15 +289,15 @@ int Dataset::get_most_common_class_label()
 		printf("Dataset is empty.\n");
 		exit(-1);
 	}
-	int label_count[CLASS_NUM] = { 0 }; // Number of instances corresponding to each label
+	int label_count[CLASS_NUM] = { 0 }; 
 	for (int i = 0; i < this->len; i++)
 	{
 		label_count[this->data[i].label]++;
 	}
 
-	int max_label[CLASS_NUM]; // Array of labels with the maximum number
-	int max_count = 0; // Maximum number of instances in a label
-	int max_label_count = 0; // The number of labels with the maximum number
+	int max_label[CLASS_NUM]; 
+	int max_count = 0; 
+	int max_label_count = 0; 
 	for (int i = 0; i < CLASS_NUM; i++)
 	{
 		if (label_count[i] > max_count)
@@ -309,7 +313,7 @@ int Dataset::get_most_common_class_label()
 		}
 	}
 
-	int max_label_final = max_label[rand() % max_label_count]; // Randomly select one of the largest labels
+	int max_label_final = max_label[rand() % max_label_count]; 
 	return max_label_final;
 }
 
@@ -336,21 +340,21 @@ char* Instance::to_str()
 	char* str = new char[200];
 	int offset = 0;
 	char label_name[20];
-	strcpy(label_name, CLASS_LABELS[this->label]); // Get the string corresponding to the label
-	for (int i = 0; i < CLASS_NUM; i++) // Ensure that the tag string does not exceed 20 characters
+	strcpy(label_name, CLASS_LABELS[this->label]); 
+	for (int i = 0; i < CLASS_NUM; i++) 
 	{
 		if (strlen(label_name) > 19)
 		{
-			label_name[19] = '\0'; // truncate a string
+			label_name[19] = '\0'; 
 			break;
 		}
 	}
 
-	for (int i = 0; i < FEATURE_NUM; i++) // Convert feature values to strings
+	for (int i = 0; i < FEATURE_NUM; i++) 
 	{
 		offset += sprintf(str + offset, "%f,", this->feature[i]);
 	}
-	sprintf(str + offset, "%s\n", label_name); // Add label string to the end
+	sprintf(str + offset, "%s\n", label_name);
 	return str;
 }
 

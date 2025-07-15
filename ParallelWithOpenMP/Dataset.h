@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 
 #define INSTANCE_MAX_NUM (1600) // Maximum number of instances
 #define FEATURE_NUM (11) // Number of feature dimensions
@@ -12,7 +13,11 @@ class Instance
 {
 public:
 	Instance(float* feature, int label);
-	Instance() {} // Uninitialized
+	Instance() : label(0) {
+		for (int i = 0; i < FEATURE_NUM; i++) {
+			feature[i] = 0.0f;
+		}
+	}
 	float feature[FEATURE_NUM];
 	int label; // Value 0~CLASS_NUM-1
 

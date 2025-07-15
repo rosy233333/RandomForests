@@ -20,25 +20,47 @@ RandomForestClassifier::~RandomForestClassifier()
 
 void RandomForestClassifier::train(Dataset* dataset)
 {
-	for (int i = 0; i < tree_num; i++) // Parallelizable, no data contention
-	{
-		Dataset* bootstrap_sample = dataset->bootstrap(bootstrap_data_num, bootstrap_feature_ratio);
-		this->trees[i].train(bootstrap_sample);
-		delete bootstrap_sample;
-	}
+#ifdef PARALLELIZE_ON_TREES_CUDA
+    
+    cudaStream_t streams[tree_num];
+    for (int i = 0; i < tree_num; i++) {
+        cudaStreamCreate(&streams[i]);
+    }
+	printf("1");
+    
+    
+    for (int i = 0; i < tree_num; i++) {
+        Dataset* bootstrap_sample = dataset->bootstrap(bootstrap_data_num, bootstrap_feature_ratio);
+        
+        trainTreeAsync(&trees[i], bootstrap_sample, streams[i]);
+    }
+    
+    
+    for (int i = 0; i < tree_num; i++) {
+        cudaStreamSynchronize(streams[i]);
+        cudaStreamDestroy(streams[i]);
+    }
+#else
+    // 原有的串行实现
+    for (int i = 0; i < tree_num; i++) {
+        Dataset* bootstrap_sample = dataset->bootstrap(bootstrap_data_num, bootstrap_feature_ratio);
+        this->trees[i].train(bootstrap_sample);
+        delete bootstrap_sample;
+    }
+#endif
 }
 
 int* RandomForestClassifier::test(Dataset* dataset)
 {
 	int* results = new int[dataset->len];
-	int(*votes)[CLASS_NUM] = (int (*)[CLASS_NUM])new int[CLASS_NUM * dataset->len]; // 2-dimensional array, first dimension represents instances, second dimension represents vote results
-	int* max_votes = new int[dataset->len]; // Store the maximum number of votes per instance
+	int(*votes)[CLASS_NUM] = (int (*)[CLASS_NUM])new int[CLASS_NUM * dataset->len]; 
+	int* max_votes = new int[dataset->len]; 
 	memset(votes, 0, sizeof(int) * CLASS_NUM * dataset->len);
 	memset(max_votes, 0, sizeof(int) * dataset->len);
-	for (int i = 0; i < this->tree_num; i++) // Parallelizable with data competition for max_votes
+	for (int i = 0; i < this->tree_num; i++) 
 	{
 		int* current_results = this->trees[i].test(dataset);
-		for (int j = 0; j < dataset->len; j++) // Parallelizable, no data contention
+		for (int j = 0; j < dataset->len; j++) 
 		{
 			votes[j][current_results[j]]++;
 			if (votes[j][current_results[j]] > max_votes[j]) {
@@ -48,7 +70,7 @@ int* RandomForestClassifier::test(Dataset* dataset)
 		delete[] current_results;
 	}
 
-	for (int i = 0; i < dataset->len; i++) // Parallelizable, no data contention
+	for (int i = 0; i < dataset->len; i++) 
 	{
 		int max_vote_class[CLASS_NUM];
 		int max_vote_count = 0;
@@ -60,7 +82,7 @@ int* RandomForestClassifier::test(Dataset* dataset)
 				break;
 			}
 		}
-		int max_vote_class_final = max_vote_class[rand() % max_vote_count]; // Randomly select the category with the largest number of votes
+		int max_vote_class_final = max_vote_class[rand() % max_vote_count]; 
 		results[i] = max_vote_class_final;
 	}
 

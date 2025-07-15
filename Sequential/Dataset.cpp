@@ -1,11 +1,15 @@
+#define _USE_MATH_DEFINES
+#include "Dataset.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
-#include "Dataset.h"
+#include <cmath>
+#include <cstddef>
+#include <algorithm>
 
-extern const char* CLASS_LABELS[CLASS_NUM] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }; // The string corresponding to the class label
-extern const char* SPLIT_TOKEN = ",;\n"; // Separator for each row of data in the dataset file
+const char* CLASS_LABELS[CLASS_NUM] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }; // The string corresponding to the class label
+const char* SPLIT_TOKEN = ",;\n"; // Separator for each row of data in the dataset file
 
 Dataset* Dataset::from_file(const char* filename)
 {
