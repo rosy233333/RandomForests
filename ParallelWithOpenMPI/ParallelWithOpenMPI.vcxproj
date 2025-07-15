@@ -24,6 +24,7 @@
     <ProjectGuid>{11cc319a-bbf7-4e47-8a08-f3ccf54433fa}</ProjectGuid>
     <RootNamespace>ParallelWithOpenMPI</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>ParallelWithMPI</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
